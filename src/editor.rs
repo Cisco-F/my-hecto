@@ -1,9 +1,7 @@
 use crossterm::{
-    event::{read, Event::{self, Key}, KeyCode::Char, KeyEvent, KeyModifiers}, 
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType}, 
-    execute,
+    cursor::MoveTo, event::{read, Event::{self, Key}, KeyCode::Char, KeyEvent, KeyModifiers}, execute, terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType}
 };
-use std::io::stdout;
+use std::io::{stdout, Error as IoE};
 
 pub struct Editor{
     quit: bool,
@@ -22,23 +20,24 @@ impl Editor {
         result.unwrap();
     }
     /// do some initializing job
-    fn initialize() -> Result<(), std::io::Error> {
+    fn initialize() -> Result<(), IoE> {
         enable_raw_mode()?;
+        Self::draw_rows()?;
         Self::clear_screen()
     }
     /// do some job before exiting
-    fn terminate() -> Result<(), std::io::Error> {
+    fn terminate() -> Result<(), IoE> {
         disable_raw_mode()
     }
     /// read-eval-print-loop
-    fn repl(&mut self) -> Result<(), std::io::Error> {
+    fn repl(&mut self) -> Result<(), IoE> {
         loop {
             let event = read()?;
             self.evaluate_event(&event);
 
             if self.quit == true {
                 Self::clear_screen()?;
-                print!("Thanks for using");
+                print!("Thanks for using! \r\n");
                 break;
             }
         }
@@ -59,8 +58,22 @@ impl Editor {
         }
     }
     /// clear the screen, send "/x1b[kJ" to the terminal, where k is 1, 2 or NaN
-    fn clear_screen() -> Result<(), std::io::Error> {
+    fn clear_screen() -> Result<(), IoE> {
         let mut stdout = stdout();
         execute!(stdout, Clear(ClearType::All))
+    }
+    fn move_cursor(x: u16, y: u16) -> Result<(), IoE> {
+        execute!(stdout(), MoveTo(x, y))?;
+        Ok(())
+    }
+    fn draw_rows() -> Result<(), IoE> {
+        let (_x, y) = terminal::size()?;
+        println!("[debug] terminal size, x: {_x}, y: {y}");
+        for i in 0..=y {
+            print!("~\r\n");
+            // Self::move_cursor(0, y+1)?;
+        }
+        Self::move_cursor(0, 0)?;
+        Ok(())
     }
 }
