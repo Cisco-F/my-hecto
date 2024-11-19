@@ -26,7 +26,7 @@ impl Editor {
             let event = read()?;
             self.evaluate_event(&event);
 
-            if self.quit == true {
+            if self.quit {
                 break;
             }
         }
