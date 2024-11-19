@@ -27,8 +27,6 @@ impl Editor {
             self.evaluate_event(&event);
 
             if self.quit == true {
-                Terminal::terminate()?;
-                
                 break;
             }
         }
