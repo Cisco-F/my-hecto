@@ -1,7 +1,7 @@
 mod terminal;
 mod view;
 
-use crossterm::event::{read, Event::{self, Key}, KeyCode::{self, *}, KeyEvent, KeyModifiers};
+use crossterm::event::{read, Event::{self, Key, Resize}, KeyCode::{self, *}, KeyEvent, KeyModifiers};
 use view::View;
 use std::{cmp::min, io::Error as IoE};
 use terminal::{Position, Size, Terminal};
@@ -49,25 +49,31 @@ impl Editor {
     }
     /// evaluate an event and distribute to corresponding method
     fn evaluate_event(&mut self, event: &Event) -> Result<(), IoE> {
-        if let Key(KeyEvent{ 
-            code, 
-            modifiers, 
-            kind: _, 
-            state: _,
-        }) = event {
-            // println!("[debug]: code: {code:?}, modifiers: {modifiers:?} \r");
-            match code {
+        match event {
+            Key(KeyEvent { 
+                code, 
+                modifiers, 
+                kind: _, 
+                state: _,
+            }) => match code {
                 Char('q') if *modifiers == KeyModifiers::CONTROL => {
                     self.quit = true;
                 },
                 Up | Down | Left | Right | PageUp | PageDown | Home | End => {
                     self.move_cursor(*code)?;
                 },
+
                 _ => (),
-            }
+            },
+            Resize(_, _) => {
+                self.view.need_render();
+            },
+            _ => (),
         }
+        
         Ok(())
     }
+    /// triggers when user push direction buttons or HOME, END ...
     fn move_cursor(&mut self, code: KeyCode) -> Result<(), IoE> {
         let Size { width, height } = Terminal::size()?;
         let Position { mut x, mut y } = self.position;
@@ -101,7 +107,8 @@ impl Editor {
         self.position = Position{ x, y };
         Ok(())
     }
-    fn refresh_screen(&self) -> Result<(), IoE> {
+    /// refresh the screen
+    fn refresh_screen(&mut self) -> Result<(), IoE> {
         Terminal::hide_cursor()?;
         Terminal::reset_cursor()?;
         self.view.render()?;
@@ -112,6 +119,8 @@ impl Editor {
         Terminal::show_cursor()?;
         Terminal::execute()
     }
+    /// pass the first param in the command line to View as the file name
+    /// TODO: support file in other paths
     pub fn parse_param(&mut self) {
         let args: Vec<String> = std::env::args().collect();
         if let Some(path) = args.get(1) {

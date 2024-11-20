@@ -6,7 +6,8 @@ const NAME: &str = env!("CARGO_PKG_NAME");
 
 /// contents shown on the screen
 pub struct View {
-    buffer: Buffer
+    buffer: Buffer,
+    need_redraw: bool,
 }
 
 /// buffer that records contents for each line
@@ -17,27 +18,39 @@ pub struct Buffer {
 impl View {
     pub fn new() -> Self {
         Self {
-            buffer: Buffer::new()
+            buffer: Buffer::new(),
+            need_redraw: true,
         }
     }
     /// render the terminal window
-    pub fn render(&self) -> Result<(), IoE> {
+    pub fn render(&mut self) -> Result<(), IoE> {
         if self.buffer.is_empty() {
             Self::render_welcome_screen()?;
-        } else {
+        } else if self.need_redraw {
             self.render_buffer()?;
         }
         Terminal::execute()
+    }
+    /// render a single line
+    fn render_line(row: usize, text: &str) -> Result<(), IoE> {
+        Terminal::move_cursor(Position { x: 0, y: row })?;
+        Terminal::clear_line()?;
+        Terminal::print(text)?;
+        Ok(())
+    }
+    /// draw a '~' at the start of the line
+    fn render_empty_line(row: usize) -> Result<(), IoE> {
+        Self::render_line(row, "~")?;
+        Ok(())
     }
     /// draw welcome message; part of initializing work
     fn render_welcome_screen() -> Result<(), IoE> {
         let Size { height, .. } = Terminal::size()?;
         for y in 0..height {
-            Terminal::clear_line()?;
             if y == height / 3 * 2 {
-                Self::draw_welcome_message()?;
+                Self::render_line(y, &Self::welcome_message())?;
             } else {
-                Self::draw_empty_row()?;
+                Self::render_empty_line(y)?;
             }
 
             if y.saturating_add(1) < height {
@@ -46,38 +59,42 @@ impl View {
         }
         Ok(())
     }
-    pub fn render_buffer(&self) -> Result<(), IoE> {
-        let Size { height, .. } = Terminal::size()?;
+    /// render contents in the buffer, namely the file content
+    pub fn render_buffer(&mut self) -> Result<(), IoE> {
+        let Size { height, width } = Terminal::size()?;
         for y in 0..height {
-            Terminal::clear_line()?;
             if let Some(line) = self.buffer.lines.get(y as usize) {
-                Terminal::print(line)?;
-                if y.saturating_add(1) < height {
-                    Terminal::print("\r\n")?;
-                }
+                // for situation where line's len is bigger than terminal's width, we only render it's child slice
+                let truncated_line = if line.len() >= width as usize {
+                    &line[0..width]
+                } else {
+                    line
+                };
+                Self::render_line(y, truncated_line)?;
+            } else {
+                Self::render_empty_line(y)?;
             }
         }
+
+        self.need_redraw = false;
         Ok(())
     }
-    /// draw a '~' at the start of the line
-    fn draw_empty_row() -> Result<(), IoE> {
-        Terminal::print("~")?;
-        Ok(())
-    }
-    fn draw_welcome_message() -> Result<(), IoE> {
+    /// returns a string including project name and version
+    fn welcome_message() -> String {
         let msg = format!("{NAME} -- version {VERSION}");
-        let width = Terminal::size()?.width;
-        let padding = (width - msg.len() as u16) / 2;
-        let spaces = " ".repeat(padding as usize);
-        let msg = format!("~{spaces}{msg}");
-        Terminal::print(&msg)?;
-        Terminal::execute()
+        let width = Terminal::size().unwrap().width;
+        let padding = (width - msg.len()) / 2;
+        let spaces = " ".repeat(padding);
+        format!("~{spaces}{msg}")
     }
     /// load file from given path. if file inexists, just panic
     pub fn load_file(&mut self, path: &str) {
         if let Err(_) = self.buffer.load_file(path) {
             self.buffer = Buffer::default();
         }
+    }
+    pub fn need_render(&mut self) {
+        self.need_redraw = true;
     }
 }
 

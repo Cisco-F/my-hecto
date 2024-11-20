@@ -5,8 +5,8 @@ use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearT
 
 #[derive(Clone, Copy)]
 pub struct Position {
-    pub x: u16,
-    pub y: u16,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl Position {
@@ -18,8 +18,8 @@ impl Position {
 #[allow(unused)]
 #[derive(Clone, Copy)]
 pub struct Size {
-    pub width: u16,
-    pub height: u16,
+    pub width: usize,
+    pub height: usize,
 }
 
 pub struct Terminal();
@@ -55,6 +55,8 @@ impl Terminal {
     /// size of current terminal
     pub fn size() -> Result<Size, IoE> {
         let (width, height) = terminal::size()?;
+        let width = width as usize;
+        let height = height as usize;
         Ok(Size { width, height })
     }
     /// reset cursor to the top left
@@ -63,7 +65,7 @@ impl Terminal {
     }
     /// move cursor to given position
     pub fn move_cursor(position: Position) -> Result<(), IoE> {
-        Self::push_command_queue(MoveTo(position.x, position.y))
+        Self::push_command_queue(MoveTo(position.x as u16, position.y as u16))
     }
     /// hide terminal cursor. operation will be written in terminal buffer
     pub fn hide_cursor() -> Result<(), IoE> {
