@@ -11,6 +11,8 @@ pub struct Editor{
     quit: bool,
     // current position of the cursor
     position: Position,
+    /// contents shown on the screen
+    view: View,
 }
 
 impl Editor {
@@ -19,6 +21,7 @@ impl Editor {
         Editor{ 
             quit: false,
             position: Position::default(),
+            view: View::new(),
         }
     } 
     /// start functioning
@@ -100,7 +103,7 @@ impl Editor {
     fn refresh_screen(&self) -> Result<(), IoE> {
         Terminal::hide_cursor()?;
         Terminal::reset_cursor()?;
-        View::render()?;
+        self.view.render()?;
         Terminal::move_cursor(Position {
             x: self.position.x,
             y: self.position.y,

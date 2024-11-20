@@ -4,22 +4,37 @@ use std::io::Error as IoE;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
 
-pub struct View();
+/// contents shown on the screen
+pub struct View {
+    buffer: Buffer
+}
+
+/// buffer that records contents for each line
+pub struct Buffer {
+    lines: Vec<String>,
+}
 
 impl View {
+    pub fn new() -> Self {
+        Self {
+            buffer: Buffer::new()
+        }
+    }
     /// render the terminal window
-    pub fn render() -> Result<(), IoE> {
-        Terminal::clear_line()?;
-        // Terminal::move_cursor(Position { x: 0, y: 1 })?;
-        Terminal::print("Hello world!\r\n")?;
+    pub fn render(&self) -> Result<(), IoE> {
         let Size { height, .. } = Terminal::size()?;
-        for y in 1..height {
+        for y in 0..height {
             Terminal::clear_line()?;
-            if y == height / 3 * 2 {
-                Self::draw_welcome_message()?;
+            if let Some(line) = self.buffer.lines.get(y as usize) {
+                Terminal::print(line)?;
             } else {
-                Self::draw_empty_row()?;
+                if y == height / 3 * 2 {
+                    Self::draw_welcome_message()?;
+                } else {
+                    Self::draw_empty_row()?;
+                }
             }
+
             if y.saturating_add(1) < height {
                 Terminal::print("\r\n")?;
             }
@@ -41,5 +56,14 @@ impl View {
     fn draw_empty_row() -> Result<(), IoE> {
         Terminal::print("~")?;
         Ok(())
+    }
+}
+
+impl Buffer {
+    /// generated target contains a String
+    fn new() -> Buffer {
+        Self {
+            lines: vec!["Hello World".to_string()]
+        }
     }
 }
