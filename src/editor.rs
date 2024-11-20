@@ -1,6 +1,8 @@
 mod terminal;
+mod view;
 
 use crossterm::event::{read, Event::{self, Key}, KeyCode::{self, *}, KeyEvent, KeyModifiers};
+use view::View;
 use std::{cmp::min, io::Error as IoE};
 use terminal::{Position, Size, Terminal};
 
@@ -32,14 +34,12 @@ impl Editor {
     /// read-eval-print-loop
     fn repl(&mut self) -> Result<(), IoE> {
         loop {
-            let event = read()?;
-            // update after user enters something
-            self.evaluate_event(&event)?;
             self.refresh_screen()?;
-
             if self.quit {
                 break;
             }
+            let event = read()?;
+            self.evaluate_event(&event)?;
         }
         Ok(())
     }
@@ -99,23 +99,13 @@ impl Editor {
     }
     fn refresh_screen(&self) -> Result<(), IoE> {
         Terminal::hide_cursor()?;
-        self.draw_rows()?;
+        Terminal::reset_cursor()?;
+        View::render()?;
         Terminal::move_cursor(Position {
             x: self.position.x,
             y: self.position.y,
         })?;
         Terminal::show_cursor()?;
-        Terminal::execute()
-    }
-    /// draw '~' at the start of each line
-    pub fn draw_rows(&self) -> Result<(), IoE> {
-        Terminal::reset_cursor()?;
-        Terminal::clear_screen()?;
-        let y = Terminal::size().unwrap().height;
-        for _ in 0..y {
-            Terminal::print("~\r\n")?;
-        }
-        // Self::reset_cursor()?;
         Terminal::execute()
     }
 }

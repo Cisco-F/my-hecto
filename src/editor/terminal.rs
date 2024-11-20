@@ -3,9 +3,6 @@ use crossterm::{queue, style::Print, Command};
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const NAME: &str = env!("CARGO_PKG_NAME");
-
 #[derive(Clone, Copy)]
 pub struct Position {
     pub x: u16,
@@ -32,7 +29,6 @@ impl Terminal {
     pub fn initialize() -> Result<(), IoE> {
         enable_raw_mode()?;
         Self::clear_screen()?;
-        Self::welcome_message()?;
         Self::execute()
     }
     /// do some work before exiting
@@ -43,18 +39,6 @@ impl Terminal {
         Self::print("\x1b[32mThanks for using! \r\n")?;
         disable_raw_mode()
     }
-    // draw welcome message; part of initializing work
-    fn welcome_message() -> Result<(), IoE> {
-        let msg = format!("{NAME} -- version {VERSION}");
-        let size = Self::size()?;
-        let len = msg.len() as u16;
-        let start_row = size.height / 3 * 2;
-        let start_col = (size.width - len) / 2;
-        Self::move_cursor(Position {x: start_col, y: start_row })?;
-        Self::print(&msg)?;
-        Self::reset_cursor()?;
-        Self::execute()
-    }
     /// execute all command from command queue
     pub fn execute() -> Result<(), IoE> {
         stdout().flush()?;
@@ -62,9 +46,11 @@ impl Terminal {
     }
     /// clear the screen, send "/x1b[kJ" to the terminal, where k is 1, 2 or NaN
     pub fn clear_screen() -> Result<(), IoE> {
-        Self::hide_cursor()?;
-        Self::push_command_queue(Clear(ClearType::All))?;
-        Self::show_cursor()
+        Self::push_command_queue(Clear(ClearType::All))
+    }
+    /// clear current line
+    pub fn clear_line() -> Result<(), IoE> {
+        Self::push_command_queue(Clear(ClearType::CurrentLine))
     }
     /// size of current terminal
     pub fn size() -> Result<Size, IoE> {
