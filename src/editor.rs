@@ -30,6 +30,7 @@ impl Editor {
             panic!("Too small terminal!");
         }
         Terminal::initialize().unwrap();
+        self.parse_param();
         let result = self.repl();
         Terminal::terminate().unwrap();
         result.unwrap();
@@ -110,5 +111,11 @@ impl Editor {
         })?;
         Terminal::show_cursor()?;
         Terminal::execute()
+    }
+    pub fn parse_param(&mut self) {
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(path) = args.get(1) {
+            self.view.load_file(path);
+        }
     }
 }

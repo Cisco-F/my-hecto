@@ -82,4 +82,11 @@ impl Terminal {
         queue!(stdout(), command)?;
         Ok(())
     }
+    // pub fn exit_failure(error: IoE) {
+    //     Self::clear_screen().unwrap();
+    //     Self::reset_cursor().unwrap();
+    //     Self::print("my-hecto panic because of error: {error}!").unwrap();
+    //     disable_raw_mode().unwrap();
+    //     exit(1);
+    // }
 }
