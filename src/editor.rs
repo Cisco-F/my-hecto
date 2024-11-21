@@ -1,8 +1,10 @@
 mod terminal;
 mod view;
 mod buffer;
+mod command;
 
-use crossterm::event::{read, Event::{self, Key, Resize}, KeyCode::*, KeyEvent, KeyModifiers};
+use command::Command;
+use crossterm::event::{read, Event};
 use view::View;
 use std::{io::Error as IoE, panic::{set_hook, take_hook}};
 use terminal::Terminal;
@@ -48,7 +50,7 @@ impl Editor {
                 break;
             }
             match read() {
-                Ok(event) => self.evaluate_event(&event),
+                Ok(event) => self.evaluate_event(event),
                 Err(e) => {
                     #[cfg(debug_assertions)]
                     {
@@ -59,27 +61,19 @@ impl Editor {
         }
     }
     /// evaluate an event and distribute to corresponding method
-    fn evaluate_event(&mut self, event: &Event) {
-        match event {
-            Key(KeyEvent { 
-                code, 
-                modifiers, 
-                kind: _, 
-                state: _,
-            }) => match code {
-                Char('q') if *modifiers == KeyModifiers::CONTROL => {
+    fn evaluate_event(&mut self, event: Event) {
+        match Command::try_from(event) {
+            Ok(command) => {
+                if matches!(command, Command::Quit) {
                     self.quit = true;
-                },
-                Up | Down | Left | Right | PageUp | PageDown | Home | End => {
-                    self.view.move_cursor(*code);
-                },
-
-                _ => (),
+                } else {
+                    self.view.command_handler(command);
+                }
             },
-            Resize(width, height) => {
-                self.view.resize(*width, *height);
-            },
-            _ => (),
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                panic!("Unsupported command: {e}");
+            }
         }
     }
     /// refresh the screen

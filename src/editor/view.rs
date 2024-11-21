@@ -1,5 +1,4 @@
-use crossterm::event::KeyCode::{self, *};
-use super::{buffer::Buffer, terminal::*};
+use super::{buffer::Buffer, command::{Command, Direction}, terminal::*};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -35,6 +34,13 @@ impl View {
             }
         }
         self.need_redraw = false;
+    }
+    pub fn command_handler(&mut self, command: Command) {
+        match command {
+            Command::Quit => (),
+            Command::Move(direction) => self.move_cursor(direction),
+            Command::Resize(size) => self.resize(size),
+        }
     }
     /// draw welcome message; part of initializing work
     fn render_welcome_screen() {
@@ -73,35 +79,34 @@ impl View {
         Self::render_line(row, "~");
     }
     /// triggers when user push direction buttons or HOME, END ...
-    pub fn move_cursor(&mut self, code: KeyCode) {
+    pub fn move_cursor(&mut self, direction: Direction) {
         let Size { width, height: _ } = Terminal::size().unwrap_or_default();
         let Position { mut x, mut y } = self.position;
-        match code {
-            Up => {
+        match direction {
+            Direction::Up => {
                 y = y.saturating_sub(1);
             },
-            Down => {
+            Direction::Down => {
                 y = y.saturating_add(1);
             },
-            Left => {
+            Direction::Left => {
                 x = x.saturating_sub(1);
             },
-            Right => {
+            Direction::Right => {
                 x = x.saturating_add(1);
             }
-            PageUp => {
+            Direction::PageUp => {
                 y = 0;
             },
-            PageDown => {
+            Direction::PageDown => {
                 y = self.buffer.total_lines();
             },
-            Home => {
+            Direction::Home => {
                 x = 0;
             },
-            End => {
+            Direction::End => {
                 x = width;
             }
-            _ => (),
         }
         self.position = Position{ x, y };
         self.scroll_screen();
@@ -132,10 +137,8 @@ impl View {
         self.need_redraw = out_of_bound;
     }
     /// react to resize event
-    pub fn resize(&mut self, width: u16, height: u16) {
-        let width = width as usize;
-        let height = height as usize;
-        self.size = Size { width, height };
+    pub fn resize(&mut self, size: Size) {
+        self.size = size;
         self.need_redraw = true;
     }
     /// returns a string including project name and version
