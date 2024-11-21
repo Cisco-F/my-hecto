@@ -1,16 +1,15 @@
 mod terminal;
 mod view;
+mod buffer;
 
-use crossterm::event::{read, Event::{self, Key, Resize}, KeyCode::{self, *}, KeyEvent, KeyModifiers};
+use crossterm::event::{read, Event::{self, Key, Resize}, KeyCode::*, KeyEvent, KeyModifiers};
 use view::View;
-use std::{cmp::min, io::Error as IoE, panic::{set_hook, take_hook}};
-use terminal::{Position, Size, Terminal};
+use std::{io::Error as IoE, panic::{set_hook, take_hook}};
+use terminal::Terminal;
 
 pub struct Editor{
     // whether use entered ctrl+q
     quit: bool,
-    // current position of the cursor
-    position: Position,
     /// contents shown on the screen
     view: View,
 }
@@ -27,14 +26,13 @@ impl Editor {
         }
 
         Terminal::initialize()?;
-        let mut view = View::new();
+        let mut view = View::default();
         let args: Vec<String> = std::env::args().collect();
         if let Some(path) = args.get(1) {
             view.load_file(path);
         }
         Ok(Self {
             quit: false,
-            position: Position::default(),
             view,
         })
     }
@@ -73,59 +71,23 @@ impl Editor {
                     self.quit = true;
                 },
                 Up | Down | Left | Right | PageUp | PageDown | Home | End => {
-                    self.move_cursor(*code);
+                    self.view.move_cursor(*code);
                 },
 
                 _ => (),
             },
-            Resize(_, _) => {
-                self.view.need_render();
+            Resize(width, height) => {
+                self.view.resize(*width, *height);
             },
             _ => (),
         }
-    }
-    /// triggers when user push direction buttons or HOME, END ...
-    fn move_cursor(&mut self, code: KeyCode) {
-        let Size { width, height } = Terminal::size().unwrap_or_default();
-        let Position { mut x, mut y } = self.position;
-        match code {
-            Up => {
-                y = y.saturating_sub(1);
-            },
-            Down => {
-                y = min(y + 1, height);
-            },
-            Left => {
-                x = x.saturating_sub(1);
-            },
-            Right => {
-                x = min(x + 1, width);
-            }
-            PageUp => {
-                y = 0;
-            },
-            PageDown => {
-                y = height;
-            },
-            Home => {
-                x = 0;
-            },
-            End => {
-                x = width;
-            }
-            _ => (),
-        }
-        self.position = Position{ x, y };
     }
     /// refresh the screen
     /// ignore any errors
     fn refresh_screen(&mut self) {
         let _ = Terminal::hide_cursor();
         self.view.render();
-        let _ = Terminal::move_cursor(Position {
-            x: self.position.x,
-            y: self.position.y,
-        });
+        let _ = Terminal::move_cursor(self.view.get_position());
         let _ = Terminal::show_cursor();
         let _ = Terminal::execute();
     }

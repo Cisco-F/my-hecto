@@ -1,25 +1,28 @@
-use super::terminal::*;
-use std::io::Error as IoE;
+use crossterm::event::KeyCode::{self, *};
+use super::{buffer::Buffer, terminal::*};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
 
+type Offset = Position;
+
 /// contents shown on the screen
+#[derive(Default)]
 pub struct View {
+    pub size: Size,
     buffer: Buffer,
     need_redraw: bool,
-}
-
-/// buffer that records contents for each line
-pub struct Buffer {
-    lines: Vec<String>,
+    // current position of the cursor
+    position: Position,
+    pub offset: Offset,
 }
 
 impl View {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Self {
-            buffer: Buffer::new(),
             need_redraw: true,
+            size: Terminal::size().unwrap_or_default(),
+            ..Default::default()
         }
     }
     /// render the terminal window
@@ -48,13 +51,12 @@ impl View {
     pub fn render_buffer(&mut self) {
         let Size { height, width } = Terminal::size().unwrap_or_default();
         for y in 0..height {
-            if let Some(line) = self.buffer.lines.get(y as usize) {
+            let row = self.offset.y;
+            if let Some(line) = self.buffer.lines.get(y + row as usize) {
+                let left = self.offset.x;
+                let right = (left + width).min(line.len() - left);
                 // for situation where line's len is bigger than terminal's width, we only render it's child slice
-                let truncated_line = if line.len() >= width as usize {
-                    &line[0..width]
-                } else {
-                    line
-                };
+                let truncated_line = &line[left..right];
                 Self::render_line(y, truncated_line);
             } else {
                 Self::render_empty_line(y);
@@ -70,7 +72,72 @@ impl View {
     fn render_empty_line(row: usize) {
         Self::render_line(row, "~");
     }
-    
+    /// triggers when user push direction buttons or HOME, END ...
+    pub fn move_cursor(&mut self, code: KeyCode) {
+        let Size { width, height } = Terminal::size().unwrap_or_default();
+        let Position { mut x, mut y } = self.position;
+        match code {
+            Up => {
+                y = y.saturating_sub(1);
+            },
+            Down => {
+                y = y.saturating_add(1);
+            },
+            Left => {
+                x = x.saturating_sub(1);
+            },
+            Right => {
+                x = x.saturating_add(1);
+            }
+            PageUp => {
+                y = 0;
+            },
+            PageDown => {
+                y = height;
+            },
+            Home => {
+                x = 0;
+            },
+            End => {
+                x = width;
+            }
+            _ => (),
+        }
+        self.position = Position{ x, y };
+        self.scroll_screen();
+    }
+    /// judge if the cursor is out of view's bound
+    fn scroll_screen(&mut self) {
+        let Position { x, y } = self.position;
+        let Size { width, height } = self.size;
+        let mut out_of_bound = false;
+
+        // horizontal
+        if x < self.offset.x {
+            self.offset.x = x;
+            out_of_bound = true;
+        } else if x >= self.offset.x + width {
+            self.offset.x = x - width + 1;
+            out_of_bound = true;
+        }
+
+        //vertical
+        if y < self.offset.y {
+            self.offset.y = y;
+            out_of_bound = true;
+        } else if y >= self.offset.y + height {
+            self.offset.y = y - height + 1;
+            out_of_bound = true;
+        }
+        self.need_redraw = out_of_bound;
+    }
+    /// react to resize event
+    pub fn resize(&mut self, width: u16, height: u16) {
+        let width = width as usize;
+        let height = height as usize;
+        self.size = Size { width, height };
+        self.need_redraw = true;
+    }
     /// returns a string including project name and version
     fn welcome_message() -> String {
         let msg = format!("{NAME} -- version {VERSION}");
@@ -85,33 +152,9 @@ impl View {
             panic!("\x1b[31mError when loading file: {e}\x1b[0m");
         }
     }
-    pub fn need_render(&mut self) {
-        self.need_redraw = true;
-    }
-}
-
-impl Buffer {
-    fn new() -> Buffer {
-        Self {
-            lines: vec![]
-        }
-    }
-    /// generated target contains a String
-    #[allow(unused)]
-    fn default() -> Buffer {
-        Self {
-            lines: vec!["Hello World".to_string()]
-        }
-    }
-    /// load file from given path to buffer
-    fn load_file(&mut self, path: &str) -> Result<(), IoE> {
-        let contents = std::fs::read_to_string(path)?;
-        for line in contents.lines() {
-            self.lines.push(line.to_string());
-        }
-        Ok(())
-    }
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty()
+    /// get cursor position
+    /// Attention: corsor position is View.position - View.offset
+    pub fn get_position(&self) -> Position {
+        self.position.subtract(&self.offset).into()
     }
 }

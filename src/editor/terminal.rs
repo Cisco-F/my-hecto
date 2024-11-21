@@ -3,16 +3,10 @@ use crossterm::{queue, style::Print, Command};
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
-}
-
-impl Position {
-    pub fn default() -> Position {
-        Position{ x: 0, y: 0 }
-    }
 }
 
 #[allow(unused)]
@@ -96,11 +90,13 @@ impl Terminal {
         queue!(stdout(), command)?;
         Ok(())
     }
-    // pub fn exit_failure(error: IoE) {
-    //     Self::clear_screen().unwrap();
-    //     Self::reset_cursor().unwrap();
-    //     Self::print("my-hecto panic because of error: {error}!").unwrap();
-    //     disable_raw_mode().unwrap();
-    //     exit(1);
-    // }
+}
+
+impl Position {
+    pub const fn subtract(&self, other: &Self) -> Self {
+        Self {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
 }
