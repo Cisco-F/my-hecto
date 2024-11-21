@@ -74,7 +74,7 @@ impl View {
     }
     /// triggers when user push direction buttons or HOME, END ...
     pub fn move_cursor(&mut self, code: KeyCode) {
-        let Size { width, height } = Terminal::size().unwrap_or_default();
+        let Size { width, height: _ } = Terminal::size().unwrap_or_default();
         let Position { mut x, mut y } = self.position;
         match code {
             Up => {
@@ -93,7 +93,7 @@ impl View {
                 y = 0;
             },
             PageDown => {
-                y = height;
+                y = self.buffer.total_lines();
             },
             Home => {
                 x = 0;
