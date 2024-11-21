@@ -3,7 +3,7 @@ mod view;
 
 use crossterm::event::{read, Event::{self, Key, Resize}, KeyCode::{self, *}, KeyEvent, KeyModifiers};
 use view::View;
-use std::{cmp::min, io::Error as IoE};
+use std::{cmp::min, io::Error as IoE, panic::{set_hook, take_hook}};
 use terminal::{Position, Size, Terminal};
 
 pub struct Editor{
@@ -16,39 +16,52 @@ pub struct Editor{
 }
 
 impl Editor {
-    /// default constructor
-    pub fn default() -> Self {
-        Editor{ 
-            quit: false,
-            position: Position::default(),
-            view: View::new(),
-        }
-    } 
-    /// start functioning
-    pub fn run(&mut self) {
+    pub fn init() -> Result<Self, IoE> {
+        let current_hook = take_hook();
+        set_hook(Box::new(move |panic_info| {
+            let _ = Terminal::terminate();
+            current_hook(panic_info);
+        }));
         if Terminal::size().unwrap().height < 2 {
             panic!("Too small terminal!");
         }
-        Terminal::initialize().unwrap();
-        self.parse_param();
-        let result = self.repl();
-        Terminal::terminate().unwrap();
-        result.unwrap();
+
+        Terminal::initialize()?;
+        let mut view = View::new();
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(path) = args.get(1) {
+            view.load_file(path);
+        }
+        Ok(Self {
+            quit: false,
+            position: Position::default(),
+            view,
+        })
+    }
+    /// start functioning
+    pub fn run(&mut self) {
+        self.repl();
     }
     /// read-eval-print-loop
-    fn repl(&mut self) -> Result<(), IoE> {
+    fn repl(&mut self) {
         loop {
-            self.refresh_screen()?;
+            self.refresh_screen();
             if self.quit {
                 break;
             }
-            let event = read()?;
-            self.evaluate_event(&event)?;
+            match read() {
+                Ok(event) => self.evaluate_event(&event),
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    {
+                        panic!("Could not read event, error: {e}");
+                    }
+                }
+            }
         }
-        Ok(())
     }
     /// evaluate an event and distribute to corresponding method
-    fn evaluate_event(&mut self, event: &Event) -> Result<(), IoE> {
+    fn evaluate_event(&mut self, event: &Event) {
         match event {
             Key(KeyEvent { 
                 code, 
@@ -60,7 +73,7 @@ impl Editor {
                     self.quit = true;
                 },
                 Up | Down | Left | Right | PageUp | PageDown | Home | End => {
-                    self.move_cursor(*code)?;
+                    self.move_cursor(*code);
                 },
 
                 _ => (),
@@ -70,12 +83,10 @@ impl Editor {
             },
             _ => (),
         }
-        
-        Ok(())
     }
     /// triggers when user push direction buttons or HOME, END ...
-    fn move_cursor(&mut self, code: KeyCode) -> Result<(), IoE> {
-        let Size { width, height } = Terminal::size()?;
+    fn move_cursor(&mut self, code: KeyCode) {
+        let Size { width, height } = Terminal::size().unwrap_or_default();
         let Position { mut x, mut y } = self.position;
         match code {
             Up => {
@@ -105,26 +116,26 @@ impl Editor {
             _ => (),
         }
         self.position = Position{ x, y };
-        Ok(())
     }
     /// refresh the screen
-    fn refresh_screen(&mut self) -> Result<(), IoE> {
-        Terminal::hide_cursor()?;
-        Terminal::reset_cursor()?;
-        self.view.render()?;
-        Terminal::move_cursor(Position {
+    /// ignore any errors
+    fn refresh_screen(&mut self) {
+        let _ = Terminal::hide_cursor();
+        self.view.render();
+        let _ = Terminal::move_cursor(Position {
             x: self.position.x,
             y: self.position.y,
-        })?;
-        Terminal::show_cursor()?;
-        Terminal::execute()
+        });
+        let _ = Terminal::show_cursor();
+        let _ = Terminal::execute();
     }
-    /// pass the first param in the command line to View as the file name
-    /// TODO: support file in other paths
-    pub fn parse_param(&mut self) {
-        let args: Vec<String> = std::env::args().collect();
-        if let Some(path) = args.get(1) {
-            self.view.load_file(path);
+}
+
+impl Drop for Editor {
+    fn drop(&mut self) {
+        let _ = Terminal::terminate();
+        if self.quit {
+            let _ = Terminal::print("\x1b[32mThanks for using! \r\n");
         }
     }
 }

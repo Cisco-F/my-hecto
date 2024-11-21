@@ -1,7 +1,7 @@
 use std::io::{stdout, Error as IoE, Write};
 use crossterm::{queue, style::Print, Command};
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 
 #[derive(Clone, Copy)]
 pub struct Position {
@@ -16,7 +16,7 @@ impl Position {
 }
 
 #[allow(unused)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Size {
     pub width: usize,
     pub height: usize,
@@ -24,20 +24,27 @@ pub struct Size {
 
 pub struct Terminal();
 
+#[allow(unused)]
 impl Terminal {
     /// do some initializing work
     pub fn initialize() -> Result<(), IoE> {
         enable_raw_mode()?;
+        Self::enter_alternate_screen()?;
         Self::clear_screen()?;
         Self::execute()
     }
     /// do some work before exiting
     pub fn terminate() -> Result<(), IoE> {
+        Self::leave_alternate_screen()?;
+        Self::show_cursor()?;
         Self::execute()?;
-        Self::clear_screen()?;
-        Self::reset_cursor()?;
-        Self::print("\x1b[32mThanks for using! \r\n")?;
         disable_raw_mode()
+    }
+    pub fn enter_alternate_screen() -> Result<(), IoE> {
+        Self::push_command_queue(EnterAlternateScreen)
+    }
+    pub fn leave_alternate_screen() -> Result<(), IoE> {
+        Self::push_command_queue(LeaveAlternateScreen)
     }
     /// execute all command from command queue
     pub fn execute() -> Result<(), IoE> {
@@ -76,8 +83,13 @@ impl Terminal {
         Self::push_command_queue(Show)
     }
     /// use 'Print' with queue! instead of execute!
-    pub fn print(string: &str) -> Result<(), IoE> {
-        Self::push_command_queue(Print(string))
+    pub fn print(text: &str) -> Result<(), IoE> {
+        Self::push_command_queue(Print(text))
+    }
+    pub fn print_at(row: usize, text: &str) -> Result<(), IoE> {
+        Self::move_cursor(Position { x: 0, y: row })?;
+        Self::clear_line()?;
+        Self::print(text)
     }
     /// push a command to the command queue
     fn push_command_queue<T: Command>(command: T) -> Result<(), IoE> {
