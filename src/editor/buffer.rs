@@ -6,6 +6,7 @@ pub struct Buffer {
     pub lines: Vec<String>,
 }
 
+#[allow(dead_code)]
 impl Buffer {
     /// generated target contains a String
     #[allow(unused)]

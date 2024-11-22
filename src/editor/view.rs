@@ -80,33 +80,32 @@ impl View {
     }
     /// triggers when user push direction buttons or HOME, END ...
     pub fn move_cursor(&mut self, direction: Direction) {
-        let Size { width, height: _ } = Terminal::size().unwrap_or_default();
+        let Size { height, .. } = Terminal::size().unwrap_or_default();
         let Position { mut x, mut y } = self.position;
         match direction {
-            Direction::Up => {
-                y = y.saturating_sub(1);
-            },
-            Direction::Down => {
-                y = y.saturating_add(1);
-            },
+            Direction::Up => y = y.saturating_sub(1),
+            Direction::Down => y = y.saturating_add(1),
             Direction::Left => {
-                x = x.saturating_sub(1);
+                if x > 0 {
+                    x -= 1;
+                } else if y > 0 {
+                    y -= 1;
+                    x = self.buffer.lines.get(y).map_or(0, |line| line.len());
+                }
             },
             Direction::Right => {
-                x = x.saturating_add(1);
+                let len = self.buffer.lines.get(y).map_or(0, |line| line.len());
+                if x < len {
+                    x += 1;
+                } else {
+                    y = y.saturating_add(1);
+                    x = 0;
+                }
             }
-            Direction::PageUp => {
-                y = 0;
-            },
-            Direction::PageDown => {
-                y = self.buffer.total_lines();
-            },
-            Direction::Home => {
-                x = 0;
-            },
-            Direction::End => {
-                x = width;
-            }
+            Direction::PageUp => y = 0,
+            Direction::PageDown => y = self.offset.y + height - 1,
+            Direction::Home => x = 0,
+            Direction::End => x = self.buffer.lines.get(y).map_or(0, |line| line.len()),
         }
         self.position = Position{ x, y };
         self.scroll_screen();
