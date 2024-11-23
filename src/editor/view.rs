@@ -102,7 +102,7 @@ impl View {
                     x = 0;
                 }
             }
-            Direction::PageUp => y = 0,
+            Direction::PageUp => y = self.offset.y,
             Direction::PageDown => y = self.offset.y + height - 1,
             Direction::Home => x = 0,
             Direction::End => x = self.buffer.lines.get(y).map_or(0, |line| line.len()),
