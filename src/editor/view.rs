@@ -107,6 +107,8 @@ impl View {
             Direction::Home => x = 0,
             Direction::End => x = self.buffer.lines.get(y).map_or(0, |line| line.len()),
         }
+        x = self.buffer.lines.get(y).map_or(0, |line| x.min(line.len()));
+        y = y.min(self.buffer.total_lines());
         self.position = Position{ x, y };
         self.scroll_screen();
     }
