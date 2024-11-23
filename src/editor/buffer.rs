@@ -25,3 +25,17 @@ impl Buffer {
         self.lines.len()
     }
 }
+
+// #[cfg(test)]
+// #[test]
+// fn test_load_first_line() {
+//     let mut buffer = Buffer::default();
+//     buffer.load_file("Grapheme.txt").unwrap();
+//     let line = buffer.lines.get(0).unwrap();
+//     for frag in &line.fragments {
+//         let a = &frag.grapheme;
+//         let b = &frag.grapheme_width;
+//         let c = &frag.replacement.unwrap_or_else(|| 'n');
+//         println!("{a:?}, {b:?}, {c:?}");
+//     }
+// }

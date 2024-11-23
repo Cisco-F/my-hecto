@@ -3,8 +3,8 @@ use std::ops::{Add, Range};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-#[derive(Copy, Clone)]
-enum GraphemeWidth {
+#[derive(Copy, Clone, Debug)]
+pub enum GraphemeWidth {
     Half, 
     Full
 }
@@ -31,19 +31,24 @@ pub struct Line {
 }
 
 impl Line {
+    // 看不懂
     pub fn from(str: &str) -> Self {
         let fragments = str
             .graphemes(true)
             .map(|grapheme| {
-                let u_width = grapheme.width();
-                let grapheme_width = match u_width {
-                    0 | 1 => GraphemeWidth::Half,
-                    _ => GraphemeWidth::Full,
-                };
-                let replacement = match u_width {
-                    0 => Some('.'),
-                    _ => None,
-                };
+                let (replacement, grapheme_width) = 
+                Self::replacement_character(grapheme)
+                    .map_or_else(
+                        || {
+                            let unicode_width = grapheme.width();
+                            let grapheme_width = match unicode_width {
+                                0 | 1 => GraphemeWidth::Half,
+                                _ => GraphemeWidth::Full,
+                            };
+                            (None, grapheme_width)
+                        },
+                        |replacement| (Some(replacement), GraphemeWidth::Half),
+                    );
 
                 GraphemeFragment {
                     grapheme: grapheme.to_string(),
@@ -53,6 +58,25 @@ impl Line {
             })
             .collect();
         Self { fragments }
+    }
+    /// fill in GraphemeFragment's replacement field
+    fn replacement_character(grapheme_str: &str) -> Option<char> {
+        let width = grapheme_str.width();
+        match grapheme_str {
+            " " => None,
+            "\t" => Some(' '),
+            _ if width > 0 && grapheme_str.trim().is_empty() => Some('␣'),
+            _ if width == 0 => {
+                let mut chars = grapheme_str.chars();
+                if let Some(c) = chars.next() {
+                    if c.is_control() && chars.next().is_none() {
+                        return Some('▯')
+                    }
+                }
+                Some('·')
+            }
+            _ => None,
+        }
     }
     pub fn get_graphems(&self, range: Range<usize>) -> String {
         let mut ret = String::new();
@@ -68,7 +92,7 @@ impl Line {
             if end > range.start {
                 if end > range.end || pos < range.start {
                     // Clip on the right or left
-                    ret.push('⋯');
+                    ret.push('·');
                 } else if let Some(char) = fragment.replacement {
                     ret.push(char);
                 } else {
