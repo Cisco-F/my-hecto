@@ -24,6 +24,13 @@ impl View {
             ..Default::default()
         }
     }
+    pub fn command_handler(&mut self, command: Command) {
+        match command {
+            Command::Quit => (),
+            Command::Move(direction) => self.move_cursor(direction),
+            Command::Resize(size) => self.resize(size),
+        }
+    }
     /// render the terminal window
     pub fn render(&mut self) {
         if self.need_redraw {
@@ -34,13 +41,6 @@ impl View {
             }
         }
         self.need_redraw = false;
-    }
-    pub fn command_handler(&mut self, command: Command) {
-        match command {
-            Command::Quit => (),
-            Command::Move(direction) => self.move_cursor(direction),
-            Command::Resize(size) => self.resize(size),
-        }
     }
     /// draw welcome message; part of initializing work
     fn render_welcome_screen() {
@@ -61,9 +61,7 @@ impl View {
             if let Some(line) = self.buffer.lines.get(y + row as usize) {
                 let left = self.offset.x;
                 let right = (left + width).min(line.len() - left);
-                // for situation where line's len is bigger than terminal's width, we only render it's child slice
-                let truncated_line = &line[left..right];
-                Self::render_line(y, truncated_line);
+                Self::render_line(y, &line.get_graphems(left..right));
             } else {
                 Self::render_empty_line(y);
             }
@@ -102,7 +100,7 @@ impl View {
                     x = 0;
                 }
             }
-            Direction::PageUp => y = 0,
+            Direction::PageUp => y = self.offset.y,
             Direction::PageDown => y = self.offset.y + height - 1,
             Direction::Home => x = 0,
             Direction::End => x = self.buffer.lines.get(y).map_or(0, |line| line.len()),

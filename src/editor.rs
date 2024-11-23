@@ -2,6 +2,7 @@ mod terminal;
 mod view;
 mod buffer;
 mod command;
+mod line;
 
 use command::Command;
 use crossterm::event::{read, Event};
