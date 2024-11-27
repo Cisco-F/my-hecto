@@ -5,8 +5,8 @@ use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearT
 
 #[derive(Clone, Copy, Default)]
 pub struct Position {
-    pub x: usize,
-    pub y: usize,
+    pub col: usize,
+    pub row: usize,
 }
 
 #[allow(unused)]
@@ -62,11 +62,11 @@ impl Terminal {
     }
     /// reset cursor to the top left
     pub fn reset_cursor() -> Result<(), IoE> {
-        Self::move_cursor(Position { x: 0, y: 0 })
+        Self::move_cursor(Position { col: 0, row: 0 })
     }
     /// move cursor to given position
     pub fn move_cursor(position: Position) -> Result<(), IoE> {
-        Self::push_command_queue(MoveTo(position.x as u16, position.y as u16))
+        Self::push_command_queue(MoveTo(position.col as u16, position.row as u16))
     }
     /// hide terminal cursor. operation will be written in terminal buffer
     pub fn hide_cursor() -> Result<(), IoE> {
@@ -81,7 +81,7 @@ impl Terminal {
         Self::push_command_queue(Print(text))
     }
     pub fn print_at(row: usize, text: &str) -> Result<(), IoE> {
-        Self::move_cursor(Position { x: 0, y: row })?;
+        Self::move_cursor(Position { col: 0, row })?;
         Self::clear_line()?;
         Self::print(text)
     }
@@ -95,8 +95,8 @@ impl Terminal {
 impl Position {
     pub const fn subtract(&self, other: &Self) -> Self {
         Self {
-            x: self.x - other.x,
-            y: self.y - other.y,
+            col: self.col - other.col,
+            row: self.row - other.row,
         }
     }
 }

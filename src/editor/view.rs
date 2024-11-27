@@ -5,15 +5,22 @@ const NAME: &str = env!("CARGO_PKG_NAME");
 
 type Offset = Position;
 
+/// changed position expression to better support graphemes
+#[derive(Copy, Clone, Default)]
+pub struct Location {
+    pub grapheme_index: usize, 
+    pub line_index: usize,
+}
+
 /// contents shown on the screen
 #[derive(Default)]
 pub struct View {
-    pub size: Size,
+    size: Size,
     buffer: Buffer,
     need_redraw: bool,
-    // current position of the cursor
+    /// current position of the cursor
     position: Position,
-    pub offset: Offset,
+    offset: Offset,
 }
 
 impl View {
@@ -33,53 +40,40 @@ impl View {
     }
     /// render the terminal window
     pub fn render(&mut self) {
-        if self.need_redraw {
-            if self.buffer.is_empty() {
-                Self::render_welcome_screen();
+        if !self.need_redraw {
+            return;
+        }
+
+        let Size { height, width } = self.size;
+        if height == 0 || width == 0 {
+            return;
+        }
+
+        let msg_row = height / 3;
+        let offset_row = self.offset.row;
+        for row in 0..height {
+            if let Some(line) = self.buffer.lines.get(row + offset_row) {
+                let left = self.offset.col;
+                let right = left + width;
+                Self::render_line(row, &line.get_graphems(left..right));
+            } else if row == msg_row * 2 && self.buffer.is_empty() {
+                Self::render_line(row, &Self::welcome_message(width));
             } else {
-                self.render_buffer();
+                Self::render_line(row, "~");
             }
         }
+
         self.need_redraw = false;
-    }
-    /// draw welcome message; part of initializing work
-    fn render_welcome_screen() {
-        let Size { height, .. } = Terminal::size().unwrap_or_default();
-        for y in 0..height {
-            if y == height / 3 * 2 {
-                Self::render_line(y, &Self::welcome_message());
-            } else {
-                Self::render_empty_line(y);
-            }
-        }
-    }
-    /// render contents in the buffer, namely the file content
-    pub fn render_buffer(&mut self) {
-        let Size { height, width } = Terminal::size().unwrap_or_default();
-        for y in 0..height {
-            let row = self.offset.y;
-            if let Some(line) = self.buffer.lines.get(y + row as usize) {
-                let left = self.offset.x;
-                let right = (left + width).min(line.len() - left);
-                Self::render_line(y, &line.get_graphems(left..right));
-            } else {
-                Self::render_empty_line(y);
-            }
-        }
     }
     /// render a single line
     fn render_line(row: usize, text: &str) {
         let ret = Terminal::print_at(row, text);
         debug_assert!(ret.is_ok(), "Failed to render line!");
     }
-    /// draw a '~' at the start of the line
-    fn render_empty_line(row: usize) {
-        Self::render_line(row, "~");
-    }
     /// triggers when user push direction buttons or HOME, END ...
     pub fn move_cursor(&mut self, direction: Direction) {
         let Size { height, .. } = Terminal::size().unwrap_or_default();
-        let Position { mut x, mut y } = self.position;
+        let Position { col: mut x, row: mut y } = self.position;
         match direction {
             Direction::Up => y = y.saturating_sub(1),
             Direction::Down => y = y.saturating_add(1),
@@ -100,37 +94,37 @@ impl View {
                     x = 0;
                 }
             }
-            Direction::PageUp => y = self.offset.y,
-            Direction::PageDown => y = self.offset.y + height - 1,
+            Direction::PageUp => y = self.offset.row,
+            Direction::PageDown => y = self.offset.row + height - 1,
             Direction::Home => x = 0,
             Direction::End => x = self.buffer.lines.get(y).map_or(0, |line| line.len()),
         }
         x = self.buffer.lines.get(y).map_or(0, |line| x.min(line.len()));
         y = y.min(self.buffer.total_lines());
-        self.position = Position{ x, y };
+        self.position = Position{ col: x, row: y };
         self.scroll_screen();
     }
     /// judge if the cursor is out of view's bound
     fn scroll_screen(&mut self) {
-        let Position { x, y } = self.position;
+        let Position { col: x, row: y } = self.position;
         let Size { width, height } = self.size;
         let mut out_of_bound = false;
 
         // horizontal
-        if x < self.offset.x {
-            self.offset.x = x;
+        if x < self.offset.col {
+            self.offset.col = x;
             out_of_bound = true;
-        } else if x >= self.offset.x + width {
-            self.offset.x = x - width + 1;
+        } else if x >= self.offset.col + width {
+            self.offset.col = x - width + 1;
             out_of_bound = true;
         }
 
         //vertical
-        if y < self.offset.y {
-            self.offset.y = y;
+        if y < self.offset.row {
+            self.offset.row = y;
             out_of_bound = true;
-        } else if y >= self.offset.y + height {
-            self.offset.y = y - height + 1;
+        } else if y >= self.offset.row + height {
+            self.offset.row = y - height + 1;
             out_of_bound = true;
         }
         self.need_redraw = out_of_bound;
@@ -141,12 +135,21 @@ impl View {
         self.need_redraw = true;
     }
     /// returns a string including project name and version
-    fn welcome_message() -> String {
+    fn welcome_message(width: usize) -> String {
+        if width == 0 {
+            return " ".to_string();
+        }
         let msg = format!("{NAME} -- version {VERSION}");
-        let width = Terminal::size().unwrap().width;
-        let padding = (width - msg.len()) / 2;
-        let spaces = " ".repeat(padding);
-        format!("~{spaces}{msg}")
+        let len = msg.len();
+        if width <= len {
+            return "~".to_string();
+        }
+
+        let padding = (width - len) / 2;
+        let mut ret = format!("~{}{}", " ".repeat(padding), msg);
+        ret.truncate(width);
+
+        ret
     }
     /// load file from given path. if file inexists, just panic
     pub fn load_file(&mut self, path: &str) {
