@@ -38,6 +38,11 @@ impl View {
             Command::Resize(size) => self.resize(size),
         }
     }
+    /// react to resize event
+    pub fn resize(&mut self, size: Size) {
+        self.size = size;
+        self.need_redraw = true;
+    }
     /// render the terminal window
     pub fn render(&mut self) {
         if !self.need_redraw {
@@ -106,33 +111,37 @@ impl View {
     }
     /// judge if the cursor is out of view's bound
     fn scroll_screen(&mut self) {
-        let Position { col: x, row: y } = self.position;
-        let Size { width, height } = self.size;
-        let mut out_of_bound = false;
-
-        // horizontal
-        if x < self.offset.col {
-            self.offset.col = x;
-            out_of_bound = true;
-        } else if x >= self.offset.col + width {
-            self.offset.col = x - width + 1;
-            out_of_bound = true;
-        }
-
-        //vertical
-        if y < self.offset.row {
-            self.offset.row = y;
-            out_of_bound = true;
-        } else if y >= self.offset.row + height {
-            self.offset.row = y - height + 1;
-            out_of_bound = true;
-        }
-        self.need_redraw = out_of_bound;
+        let Position { col, row } = self.position;
+        self.scroll_horizontal(col);
+        self.scroll_vertical(row);
     }
-    /// react to resize event
-    pub fn resize(&mut self, size: Size) {
-        self.size = size;
-        self.need_redraw = true;
+    fn scroll_horizontal(&mut self, to: usize) {
+        let Size { width, .. } = self.size;
+        let out_of_bound = if to < self.offset.col {
+            self.offset.col = to;
+            true
+        } else if to >= self.offset.col + width {
+            self.offset.col = to - width + 1;
+            true
+        } else {
+            false
+        };
+
+        self.need_redraw |= out_of_bound;
+    }
+    fn scroll_vertical(&mut self, to: usize) {
+        let Size { height, .. } = self.size;
+        let out_of_bound = if to < self.offset.row {
+            self.offset.row = to;
+            true
+        } else if to >= self.offset.row + height {
+            self.offset.row = to - height + 1;
+            true
+        } else {
+            false
+        };
+
+        self.need_redraw |= out_of_bound;
     }
     /// returns a string including project name and version
     fn welcome_message(width: usize) -> String {
