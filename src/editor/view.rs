@@ -89,8 +89,8 @@ impl View {
         debug_assert!(ret.is_ok(), "Failed to render line!");
     }
     fn insert(&mut self, c: char) {
-        let Location { grapheme_index, line_index } = self.location;
-        self.buffer.lines.get_mut(line_index).unwrap().insert_at(grapheme_index, c);
+        let location = self.location;
+        self.buffer.insert_at(location, c);
         self.move_right();
         self.need_redraw = true;
     }

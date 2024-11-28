@@ -1,6 +1,6 @@
 use std::io::Error as IoE;
 
-use super::line::Line;
+use super::{line::Line, view::Location};
 
 /// buffer that records contents for each line
 #[derive(Default)]
@@ -23,6 +23,14 @@ impl Buffer {
     }
     pub fn total_lines(&self) -> usize {
         self.lines.len()
+    }
+    pub fn insert_at(&mut self, location: Location, c: char) {
+        let Location { line_index, .. } = location;
+        if line_index >= self.total_lines() {
+            self.lines.push(Line::from(&String::from(c)));
+        } else {
+            self.lines.get_mut(line_index).unwrap().insert_at(location, c);
+        }
     }
 }
 
