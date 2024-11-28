@@ -16,7 +16,9 @@ pub enum Direction {
 pub enum Command {
     Move(Direction), 
     Resize(Size),
+    Insert(char),
     Quit,
+    Err,
 }
 
 impl TryFrom<Event> for Command {
@@ -29,6 +31,7 @@ impl TryFrom<Event> for Command {
             }) => {
                 match code {
                     KeyCode::Char('q') if modifiers == KeyModifiers::CONTROL => Ok(Self::Quit),
+                    KeyCode::Char(c) => Ok(Self::Insert(c)),
                     KeyCode::Up => Ok(Self::Move(Direction::Up)),
                     KeyCode::Down => Ok(Self::Move(Direction::Down)),
                     KeyCode::Left => Ok(Self::Move(Direction::Left)),
@@ -37,7 +40,8 @@ impl TryFrom<Event> for Command {
                     KeyCode::PageDown => Ok(Self::Move(Direction::PageDown)),
                     KeyCode::Home => Ok(Self::Move(Direction::Home)),
                     KeyCode::End => Ok(Self::Move(Direction::End)),
-                    _ => Err("Unsupported key: {code:?}".to_string()),
+                    // _ => Err("Unsupported key: {code:?}".to_string()),
+                    _ => Ok(Self::Err),
                 }
             },
             Event::Resize(width_u16, height_u16) => {

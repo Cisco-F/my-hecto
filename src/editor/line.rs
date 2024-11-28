@@ -120,4 +120,8 @@ impl Line {
             })
             .sum()
     }
+    pub fn insert_at(&mut self, grapheme_index: usize, c: char) {
+        let new_fragment = Self::from(&c.to_string()).fragments;
+        self.fragments.splice(grapheme_index..grapheme_index, new_fragment);
+    }
 }
