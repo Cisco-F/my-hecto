@@ -78,6 +78,8 @@ impl Line {
             _ => None,
         }
     }
+    /// get graphemes within given range
+    /// mind that one grapheme may takes 2 bits
     pub fn get_graphems(&self, range: Range<usize>) -> String {
         let mut ret = String::new();
         if range.start >= range.end {
@@ -85,10 +87,10 @@ impl Line {
         }
         let mut pos = 0;
         for fragment in &self.fragments {
-            let end = fragment.grapheme_width + pos;
             if pos >= range.end {
                 break;
             }
+            let end = fragment.grapheme_width + pos;
             if end > range.start {
                 if end > range.end || pos < range.start {
                     // Clip on the right or left
@@ -103,7 +105,19 @@ impl Line {
         }
         ret
     }
-    pub fn len(&self) -> usize {
+    /// total graphemes in a single line
+    pub fn grapheme_len(&self) -> usize {
         self.fragments.len()
+    }
+    /// returns how many spaces the graphemes before given index take on the screen
+    pub fn width_until(&self, grapheme_index: usize) -> usize {
+        self.fragments
+            .iter()
+            .take(grapheme_index)
+            .map(|fragment| match fragment.grapheme_width {
+                GraphemeWidth::Half => 1,
+                GraphemeWidth::Full => 2,
+            })
+            .sum()
     }
 }

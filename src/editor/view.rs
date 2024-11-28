@@ -1,4 +1,6 @@
-use super::{buffer::Buffer, command::{Command, Direction}, terminal::*};
+use std::cmp::min;
+
+use super::{buffer::Buffer, command::{Command, Direction}, line::Line, terminal::*};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -19,7 +21,7 @@ pub struct View {
     buffer: Buffer,
     need_redraw: bool,
     /// current position of the cursor
-    position: Position,
+    location: Location,
     offset: Offset,
 }
 
@@ -34,8 +36,14 @@ impl View {
     pub fn command_handler(&mut self, command: Command) {
         match command {
             Command::Quit => (),
-            Command::Move(direction) => self.move_cursor(direction),
+            Command::Move(direction) => self.move_location(direction),
             Command::Resize(size) => self.resize(size),
+        }
+    }
+    /// load file from given path. if file inexists, just panic
+    pub fn load_file(&mut self, path: &str) {
+        if let Err(e) = self.buffer.load_file(path) {
+            panic!("\x1b[31mError when loading file: {e}\x1b[0m");
         }
     }
     /// react to resize event
@@ -43,6 +51,9 @@ impl View {
         self.size = size;
         self.need_redraw = true;
     }
+
+    // region: rendering
+
     /// render the terminal window
     pub fn render(&mut self) {
         if !self.need_redraw {
@@ -70,48 +81,17 @@ impl View {
 
         self.need_redraw = false;
     }
-    /// render a single line
+    /// render a single line at provided row index
     fn render_line(row: usize, text: &str) {
         let ret = Terminal::print_at(row, text);
         debug_assert!(ret.is_ok(), "Failed to render line!");
     }
-    /// triggers when user push direction buttons or HOME, END ...
-    pub fn move_cursor(&mut self, direction: Direction) {
-        let Size { height, .. } = Terminal::size().unwrap_or_default();
-        let Position { col: mut x, row: mut y } = self.position;
-        match direction {
-            Direction::Up => y = y.saturating_sub(1),
-            Direction::Down => y = y.saturating_add(1),
-            Direction::Left => {
-                if x > 0 {
-                    x -= 1;
-                } else if y > 0 {
-                    y -= 1;
-                    x = self.buffer.lines.get(y).map_or(0, |line| line.len());
-                }
-            },
-            Direction::Right => {
-                let len = self.buffer.lines.get(y).map_or(0, |line| line.len());
-                if x < len {
-                    x += 1;
-                } else {
-                    y = y.saturating_add(1);
-                    x = 0;
-                }
-            }
-            Direction::PageUp => y = self.offset.row,
-            Direction::PageDown => y = self.offset.row + height - 1,
-            Direction::Home => x = 0,
-            Direction::End => x = self.buffer.lines.get(y).map_or(0, |line| line.len()),
-        }
-        x = self.buffer.lines.get(y).map_or(0, |line| x.min(line.len()));
-        y = y.min(self.buffer.total_lines());
-        self.position = Position{ col: x, row: y };
-        self.scroll_screen();
-    }
+
+    // region: scrolling
+
     /// judge if the cursor is out of view's bound
     fn scroll_screen(&mut self) {
-        let Position { col, row } = self.position;
+        let Position { col, row } = self.loc_to_pos();
         self.scroll_horizontal(col);
         self.scroll_vertical(row);
     }
@@ -143,6 +123,94 @@ impl View {
 
         self.need_redraw |= out_of_bound;
     }
+
+    // region: location & position handling
+
+    /// convert grapheme index to caret position.
+    /// due to the introduction of graphemes, some characters might take 2 or more bytes' space, 
+    /// but only 1 or 2 space's length shown on screen
+    fn loc_to_pos(&self) -> Position {
+        let row = self.location.line_index;
+        let col = self.buffer.lines.get(row).map_or(0, |line| {
+            line.width_until(self.location.grapheme_index)
+        });
+        Position { row, col }
+    }
+    pub fn caret_position(&self) -> Position {
+        self.loc_to_pos().subtract(&self.offset)
+    }
+
+    // region: text location movement
+
+    /// triggers when user push direction buttons or HOME, END ...
+    /// due to the introduction of graphemes, we need to adjust the cursor to navigate among graphemes
+    pub fn move_location(&mut self, direction: Direction) {
+        let Size { height, .. } = self.size;
+        match direction {
+            Direction::Up => self.move_up(1),
+            Direction::Down => self.move_down(1),
+            Direction::Left => self.move_left(),
+            Direction::Right => self.move_right(),
+            Direction::PageUp => self.move_up(height - 1),
+            Direction::PageDown => self.move_down(height - 1),
+            Direction::Home => self.move_to_line_start(),
+            Direction::End => self.move_to_line_end(),
+        }
+        self.scroll_screen();
+    }
+    fn move_up(&mut self, step: usize) {
+        self.location.line_index = self.location.line_index.saturating_sub(step);
+        self.snap_to_valid_grapheme();
+    }
+    fn move_down(&mut self, step: usize) {
+        self.location.line_index = self.location.line_index.saturating_add(step);
+        self.snap_to_valid_grapheme();
+        self.snap_to_valid_line();
+    }
+    fn move_left(&mut self) {
+        if self.location.grapheme_index > 0 {
+            self.location.grapheme_index -= 1;
+        } else {
+            self.move_up(1);
+            self.move_to_line_end();
+        }
+    }
+    fn move_right(&mut self) {
+        let line_len = self
+            .buffer
+            .lines
+            .get(self.location.line_index)
+            .map_or(0, Line::grapheme_len);
+        if self.location.grapheme_index < line_len {
+            self.location.grapheme_index += 1;
+        } else {
+            self.move_down(1);
+            self.move_to_line_start();
+        }
+    }
+    fn move_to_line_end(&mut self) {
+        self.location.grapheme_index = self
+            .buffer
+            .lines
+            .get(self.location.line_index)
+            .map_or(0, Line::grapheme_len);
+    }
+    fn move_to_line_start(&mut self) {
+        self.location.grapheme_index = 0;
+    }
+    fn snap_to_valid_grapheme(&mut self) {
+        self.location.grapheme_index = self
+            .buffer
+            .lines
+            .get(self.location.line_index)
+            .map_or(0, |line| {
+                min(line.grapheme_len(), self.location.grapheme_index)
+            });
+    }
+    fn snap_to_valid_line(&mut self) {
+        self.location.line_index = min(self.location.line_index, self.buffer.total_lines())
+    }
+    
     /// returns a string including project name and version
     fn welcome_message(width: usize) -> String {
         if width == 0 {
@@ -159,16 +227,5 @@ impl View {
         ret.truncate(width);
 
         ret
-    }
-    /// load file from given path. if file inexists, just panic
-    pub fn load_file(&mut self, path: &str) {
-        if let Err(e) = self.buffer.load_file(path) {
-            panic!("\x1b[31mError when loading file: {e}\x1b[0m");
-        }
-    }
-    /// get cursor position
-    /// Attention: corsor position is View.position - View.offset
-    pub fn get_position(&self) -> Position {
-        self.position.subtract(&self.offset).into()
     }
 }
