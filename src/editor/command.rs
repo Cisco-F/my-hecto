@@ -18,7 +18,6 @@ pub enum Command {
     Resize(Size),
     Insert(char),
     Quit,
-    Err,
 }
 
 impl TryFrom<Event> for Command {
@@ -40,15 +39,13 @@ impl TryFrom<Event> for Command {
                     KeyCode::PageDown => Ok(Self::Move(Direction::PageDown)),
                     KeyCode::Home => Ok(Self::Move(Direction::Home)),
                     KeyCode::End => Ok(Self::Move(Direction::End)),
-                    // _ => Err("Unsupported key: {code:?}".to_string()),
-                    _ => Ok(Self::Err),
+                    _ => Err("Unsupported key: {code:?}".to_string()),
                 }
             },
-            Event::Resize(width_u16, height_u16) => {
-                let width = width_u16 as usize;
-                let height = height_u16 as usize;
-                Ok(Self::Resize(Size { width, height }))
-            },
+            Event::Resize(width_u16, height_u16) => Ok(Self::Resize(Size {
+                width: width_u16 as usize,
+                height: height_u16 as usize,
+            })),
             _ => Err("Unsupported event: {event:?}".to_string()),
         }
     }

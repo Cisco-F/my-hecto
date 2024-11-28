@@ -71,9 +71,9 @@ impl Editor {
                     self.view.command_handler(command);
                 }
             },
-            Err(e) => {
-                #[cfg(debug_assertions)]
-                panic!("Unsupported command: {e}");
+            Err(_e) => {
+                // #[cfg(debug_assertions)]
+                // panic!("Unsupported command: {e}");
             }
         }
     }

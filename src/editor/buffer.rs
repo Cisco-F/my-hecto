@@ -26,6 +26,10 @@ impl Buffer {
     }
     pub fn insert_at(&mut self, location: Location, c: char) {
         let Location { grapheme_index, line_index } = location;
+        if line_index > self.total_lines() {
+            return;
+        }
+        
         if let Some(line) = self.lines.get_mut(line_index) {
             line.insert_at(grapheme_index, c);
         } else {

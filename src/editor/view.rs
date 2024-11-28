@@ -39,7 +39,6 @@ impl View {
             Command::Move(direction) => self.move_location(direction),
             Command::Insert(c) => self.insert(c),
             Command::Resize(size) => self.resize(size),
-            Command::Err => (),
         }
     }
     /// load file from given path. if file inexists, just panic
@@ -89,8 +88,7 @@ impl View {
         debug_assert!(ret.is_ok(), "Failed to render line!");
     }
     fn insert(&mut self, c: char) {
-        let location = self.location;
-        self.buffer.insert_at(location, c);
+        self.buffer.insert_at(self.location, c);
         self.move_right();
         self.need_redraw = true;
     }
