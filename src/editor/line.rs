@@ -3,8 +3,6 @@ use std::ops::{Add, Range};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use super::view::Location;
-
 #[derive(Copy, Clone, Debug)]
 pub enum GraphemeWidth {
     Half, 
@@ -122,9 +120,8 @@ impl Line {
             })
             .sum()
     }
-    pub fn insert_at(&mut self, location: Location, c: char) {
+    pub fn insert_at(&mut self, grapheme_index: usize, c: char) {
         let new_fragment = Self::from(&c.to_string()).fragments;
-        let Location { grapheme_index, .. } = location;
         self.fragments.splice(grapheme_index..grapheme_index, new_fragment);
     }
 }
